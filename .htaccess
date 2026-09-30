@@ -1,0 +1,155 @@
+# =============================================================================
+#  Contra Hotel - Apache / LiteSpeed configuration
+# =============================================================================
+#  This file has ONE important job on the public site: route requests for the
+#  existing static .html pages through site-router.php so that admin-managed
+#  text and image overrides can be applied.
+#
+#  It does NOT change any URL. Visitors still request /index.html, /about.html
+#  and so on; they simply receive the original file with the operator's edits
+#  applied. If mod_rewrite is unavailable, or the database is unreachable,
+#  every page is served exactly as before (see site-router.php fail-open logic).
+#
+#  Tested on: Apache 2.4, LiteSpeed (cPanel). Both are fully supported.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Directory behaviour
+# -----------------------------------------------------------------------------
+Options -Indexes -MultiViews
+DirectoryIndex index.html index.php
+
+# -----------------------------------------------------------------------------
+# Character encoding
+# -----------------------------------------------------------------------------
+AddDefaultCharset UTF-8
+
+<IfModule mod_mime.c>
+    AddType image/webp .webp
+    AddType font/woff2 .woff2
+    AddType font/woff .woff
+
+    # Ensure PHP files are never treated as plain text or downloads.
+    AddType application/x-httpd-php .php
+</IfModule>
+
+# =============================================================================
+# REWRITES
+# =============================================================================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Detect the installation subdirectory so the same files work whether the
+    # site lives at the domain root or in /subfolder/.
+    RewriteBase /
+
+    # -------------------------------------------------------------------------
+    # 1. Protect sensitive files, in case the server layout ever changes so that
+    #    storage/ or includes/ ends up inside the document root.
+    # -------------------------------------------------------------------------
+    RewriteRule ^(?:includes|storage|migrations|tests|tools|docs)(?:/|$) - [F,L]
+
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
+    RewriteRule ^(?:composer\.(?:json|lock)|package(?:-lock)?\.json|\.gitignore|\.env.*)$ - [F,L]
+
+    # -------------------------------------------------------------------------
+    # 2. Pretty admin URLs: /admin/bookings -> /admin/bookings.php
+    #
+    #    Only applies when the request is not already a real file or directory,
+    #    so existing .php links keep working and nothing is double-routed.
+    # -------------------------------------------------------------------------
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.+?)/?$ $1.php [L,QSA]
+
+    # -------------------------------------------------------------------------
+    # 3. THE SITE ROUTER
+    #
+    #    Route requests for real .html files through site-router.php. The rule
+    #    fires for /index.html, /about.html, /news.html and so on.
+    #
+    #    Add ?noedit=1 to any URL to bypass the router and receive the pristine
+    #    original file, which is invaluable when diagnosing an override.
+    # -------------------------------------------------------------------------
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteCond %{REQUEST_FILENAME} \.html?$ [NC]
+    RewriteCond %{QUERY_STRING} !(^|&)noedit=1(&|$) [NC]
+    RewriteRule ^(.+\.html?)$ site-router.php [L,QSA]
+</IfModule>
+
+# =============================================================================
+# SECURITY HEADERS
+# =============================================================================
+<IfModule mod_headers.c>
+    # Stop the browser from guessing content types.
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Do not leak the full URL to third parties.
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Deny framing of the admin panel and API. The public site is left alone in
+    # case the hotel later embeds a booking form on a partner page.
+    <FilesMatch "\.php$">
+        Header always set X-Frame-Options "SAMEORIGIN"
+    </FilesMatch>
+
+    # Send HSTS only on HTTPS deployments. Enable after confirming HTTPS works
+    # everywhere, because it is difficult to undo.
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# =============================================================================
+# CACHING
+# =============================================================================
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # HTML is routed through PHP (site-router.php), so it must not be cached by
+    # the browser without revalidation or edits would not appear.
+    ExpiresByType text/html "access plus 0 seconds"
+
+    # Static assets are safe to cache aggressively. Image filenames are unique
+    # when uploaded through the admin panel, so replacements are picked up.
+    ExpiresByType image/jpeg  "access plus 6 months"
+    ExpiresByType image/png   "access plus 6 months"
+    ExpiresByType image/webp  "access plus 6 months"
+    ExpiresByType image/gif   "access plus 6 months"
+    ExpiresByType image/svg+xml "access plus 6 months"
+    ExpiresByType text/css    "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType font/woff2  "access plus 1 year"
+    ExpiresByType font/woff   "access plus 1 year"
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# =============================================================================
+# ERROR DOCUMENTS
+# =============================================================================
+ErrorDocument 404 /404.html
+
+# =============================================================================
+# PHP SETTINGS (only applied if the host honours them)
+# =============================================================================
+<IfModule mod_php.c>
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_value upload_max_filesize 8M
+    php_value post_max_size 10M
+</IfModule>
+
+# Deny access to this file itself from remote clients (defence in depth).
+<Files ".htaccess">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</Files>

@@ -1,0 +1,65 @@
+# =============================================================================
+#  Contra Hotel - version control ignore rules
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Secrets and generated configuration
+# -----------------------------------------------------------------------------
+includes/config.local.php
+contra-config.local.php
+*.key
+.env
+.env.*
+
+# -----------------------------------------------------------------------------
+# Private runtime storage: logs, caches, backups, the SQLite database
+# -----------------------------------------------------------------------------
+storage/*
+!storage/.htaccess
+!storage/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Uploaded media. Keep the folder and its protective .htaccess, ignore contents.
+# -----------------------------------------------------------------------------
+uploads/*
+!uploads/.htaccess
+!uploads/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Local development tooling (portable PHP, test harness scratch space)
+# -----------------------------------------------------------------------------
+.devtools/
+tests/tmp/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# -----------------------------------------------------------------------------
+# Editor and OS noise
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# -----------------------------------------------------------------------------
+# Dependency managers (this project deliberately has no Composer dependencies,
+# but ignore the folder in case one is added later)
+# -----------------------------------------------------------------------------
+/vendor/
+composer.lock
+node_modules/
+
+# -----------------------------------------------------------------------------
+# Backups produced by tools/backup.php
+# -----------------------------------------------------------------------------
+storage/backups/
+*.sql.gz
+
+# Runtime temporary files (created automatically)
+storage/tmp/
+storage/uploads-tmp/
+storage/sessions/
